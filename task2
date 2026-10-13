@@ -1,0 +1,72 @@
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+using Command = void (*)(int&, int);
+
+void deposit(int& bal, int k) {
+    if (k <= 0) {
+        cout << "error" << '\n';
+        return;
+    }
+    bal += k;
+}
+
+void withdraw(int& bal, int k) {
+    if (k <= 0) {
+        cout << "error" << '\n';
+        return;
+    }
+    if (k > bal) {
+        cout << "error" << '\n';
+        return;
+    }
+    bal -= k;
+}
+
+void balance(int& bal, int k) {
+    cout << bal << '\n';
+}
+
+void reset(int& bal, int k) {
+    bal = 0;
+}
+
+void inc(int& bal, int k) {
+    ++bal;
+}
+
+int main() {
+    const string names[] = {"deposit", "withdraw", "balance", "reset", "inc"};
+    Command funcs[] = {deposit, withdraw, balance, reset, inc};
+    const int N = 5;
+
+    int bal = 0;
+    string cmd;
+
+    while (cin >> cmd) {
+        if (cmd == "stop") {
+            break;
+        }
+
+        bool found = false;
+        for (int i = 0; i < N; ++i) {
+            if (cmd == names[i]) {
+                int k = 0;
+                if (cmd == "deposit" or cmd == "withdraw") {
+                    cin >> k;
+                }
+                funcs[i](bal, k);
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            cout << "error" << '\n';
+        }
+    }
+
+    return 0;
+}
