@@ -1,0 +1,54 @@
+#include <iostream>
+
+using namespace std;
+
+double average(int* temp, int n) {
+    int su = 0;
+    for (int i = 0; i < n; ++i) {
+        su += temp[i] * 10;
+    }
+    su /= n;
+    return double(su) / 10;
+}
+
+pair<int, int> mima(int* temp, int n) {
+    int mi = temp[0];
+    int ma = temp[0];
+    for (int i = 1; i < n; ++i) {
+        if (mi > temp[i]) {
+            mi = temp[i];
+        }
+        if (ma < temp[i]) {
+            ma = temp[i];
+        }
+    }
+    return {mi, ma};
+}
+
+int lesszero(int* temp, int n) {
+    int d = 0;
+    for (int i = 0; i < n; ++i) {
+        if (temp[i] < 0) {
+            ++d;
+        }
+    }
+    return d;
+}
+
+int main() {
+    int n;
+    cin >> n;
+    int* temp = new int[n];
+    for (int i = 0; i < n; ++i) {
+        cin >> temp[i];
+    }
+
+    cout << average(temp, n) << '\n';
+
+    pair<int, int> minimax= mima(temp, n);
+    cout << minimax.first << ' ' << minimax.second << '\n';
+
+    cout << lesszero(temp, n);
+
+    return 0;
+}
