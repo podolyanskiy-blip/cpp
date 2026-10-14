@@ -4,6 +4,15 @@ using namespace std;
 
 typedef void (*Command)(int&, int);
 
+bool same(const char* a, const char* b) {
+    int i = 0;
+    while (a[i] != '\0' && b[i] != '\0') {
+        if (a[i] != b[i]) return false;
+        ++i;
+    }
+    return a[i] == b[i];
+}
+
 void deposit(int& balance, int k) {
     if (k <= 0) {
         cout << "error\n";
