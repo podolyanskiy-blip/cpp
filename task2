@@ -1,70 +1,65 @@
 #include <iostream>
-#include <string>
 
 using namespace std;
 
-using Command = void (*)(int&, int);
+typedef void (*Command)(int&, int);
 
-void deposit(int& bal, int k) {
+void deposit(int& balance, int k) {
     if (k <= 0) {
-        cout << "error" << '\n';
+        cout << "error\n";
         return;
     }
-    bal += k;
+    balance += k;
 }
 
-void withdraw(int& bal, int k) {
-    if (k <= 0) {
-        cout << "error" << '\n';
+void withdraw(int& balance, int k) {
+    if (k <= 0 || k > balance) {
+        cout << "error\n";
         return;
     }
-    if (k > bal) {
-        cout << "error" << '\n';
-        return;
-    }
-    bal -= k;
+    balance -= k;
 }
 
-void balance(int& bal, int k) {
-    cout << bal << '\n';
+void balanceCmd(int& balance, int k) {
+    cout << balance << '\n';
 }
 
-void reset(int& bal, int k) {
-    bal = 0;
+void reset(int& balance, int k) {
+    balance = 0;
 }
 
-void inc(int& bal, int k) {
-    ++bal;
+void inc(int& balance, int k) {
+    ++balance;
 }
 
 int main() {
-    const string names[] = {"deposit", "withdraw", "balance", "reset", "inc"};
-    Command funcs[] = {deposit, withdraw, balance, reset, inc};
+    const char* names[] = {"deposit", "withdraw", "balance", "reset", "inc"};
+    Command funcs[] = {deposit, withdraw, balanceCmd, reset, inc};
     const int N = 5;
 
-    int bal = 0;
-    string cmd;
+    int balance = 0;
+    char cmd[64];
 
     while (cin >> cmd) {
-        if (cmd == "stop") {
+        if (same(cmd, "stop")) {
             break;
         }
 
         bool found = false;
         for (int i = 0; i < N; ++i) {
-            if (cmd == names[i]) {
+            if (same(cmd, names[i])) {
                 int k = 0;
-                if (cmd == "deposit" or cmd == "withdraw") {
+                if (same(cmd, "deposit") || same(cmd, "withdraw")) {
                     cin >> k;
                 }
-                funcs[i](bal, k);
+                funcs[i](balance, k);
                 found = true;
                 break;
             }
         }
 
         if (!found) {
-            cout << "error" << '\n';
+            cout << "error\n";
         }
     }
 
