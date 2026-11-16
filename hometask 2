@@ -1,0 +1,452 @@
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+#include <sstream>
+#include <algorithm>
+#include <stdexcept>
+#include <iomanip>
+#include <cctype>
+#include <map>
+
+using namespace std;
+
+// ==================== EXCEPTIONS ====================
+
+class FleetError : public exception {
+protected:
+    string message;
+
+public:
+    explicit FleetError(const string& msg) : message(msg) {}
+    const char* what() const noexcept override {
+        return message.c_str();
+    }
+};
+
+class InspectionRejected : public FleetError {
+public:
+    InspectionRejected() : FleetError("inspection rejected") {}
+};
+
+class CommandError : public FleetError {
+public:
+    explicit CommandError(const string& msg) : FleetError(msg) {}
+};
+
+// ==================== MODEL SPECIFICATION ====================
+
+class ModelSpec {
+public:
+    string modelName;
+    explicit ModelSpec(const string& name) : modelName(name) {}
+};
+
+// ==================== INVENTORY ====================
+
+class InventoryItem {
+protected:
+    string id;
+    string itemName;
+
+public:
+    InventoryItem(const string& id, const string& name) : id(id), itemName(name) {
+        if (id.empty()) {
+            throw CommandError("empty inventory id");
+        }
+        if (name.empty()) {
+            throw CommandError("empty name");
+        }
+    }
+
+    virtual ~InventoryItem() = default;
+    virtual string inventoryId() const {
+        return id;
+    }
+    virtual string name() const {
+        return itemName;
+    }
+    virtual string describe() const = 0;
+    friend ostream& operator<<(ostream& out, const InventoryItem& item) {
+        out << item.inventoryId() << " " << item.name();
+        return out;
+    }
+    bool operator<(const InventoryItem& other) const {
+        return inventoryId() < other.inventoryId();
+    }
+};
+
+// ==================== ENERGY CONSUMER ====================
+
+class EnergyConsumer {
+public:
+    virtual ~EnergyConsumer() = default;
+    virtual double dailyEnergy() const = 0;
+};
+
+// ==================== TRANSPORT ====================
+
+class Transport : public virtual InventoryItem {
+protected:
+    int simplicity;
+    shared_ptr<ModelSpec> specification;
+
+public:
+    Transport(const string& id, const string& name, int score, shared_ptr<ModelSpec> spec)
+        : InventoryItem(id, name), simplicity(score), specification(move(spec)) {
+        if (score < 1 || score > 10) {
+            throw CommandError("simplicity must be from 1 to 10");
+        }
+    }
+    bool suitableForNovice() const {
+        return simplicity >= 6;
+    }
+    virtual ~Transport() = default;
+    string describe() const override {
+        return itemName;
+    }
+};
+
+// ==================== ELECTRIC SCOOTER ====================
+
+class ElectricScooter : public Transport, public EnergyConsumer {
+private:
+    double energy;
+
+public:
+    ElectricScooter(const string& id, const string& name, double energy, int score, shared_ptr<ModelSpec> spec)
+        : InventoryItem(id, name), Transport(id, name, score, move(spec)), energy(energy) {
+        if (energy < 0) {
+            throw CommandError("negative energy");
+        }
+    }
+    double dailyEnergy() const override {
+        return energy;
+    }
+};
+
+// ==================== BICYCLE ====================
+
+class Bicycle : public Transport {
+public:
+    Bicycle(const string& id, const string& name, int score, shared_ptr<ModelSpec> spec)
+        : InventoryItem(id, name), Transport(id, name, score, move(spec)) {}
+};
+
+// ==================== ELECTRIC BICYCLE ====================
+
+class ElectricBicycle : public Transport, public EnergyConsumer {
+private:
+    double energy;
+
+public:
+    ElectricBicycle(const string& id, const string& name, double energy, int score, shared_ptr<ModelSpec> spec)
+        : InventoryItem(id, name), Transport(id, name, score, move(spec)), energy(energy) {
+        if (energy < 0) {
+            throw CommandError("negative energy");
+        }
+    }
+    double dailyEnergy() const override {
+        return energy;
+    }
+};
+
+// ==================== THINGS ====================
+
+class Helmet : public InventoryItem {
+public:
+    Helmet(const string& id, const string& name)
+        : InventoryItem(id, name) {}
+    string describe() const override {
+        return itemName;
+    }
+};
+
+class Dock : public InventoryItem, public EnergyConsumer {
+private:
+    double energy;
+
+public:
+    Dock(const string& id, const string& name, double energy)
+        : InventoryItem(id, name), energy(energy) {
+        if (energy < 0) {
+            throw CommandError("negative energy");
+        }
+    }
+    double dailyEnergy() const override {
+        return energy;
+    }
+    string describe() const override {
+        return itemName;
+    }
+};
+
+// ==================== TEMPLATE CLASS ====================
+
+template<typename T, int Cap>
+class Registry {
+private:
+    vector<T> data;
+
+public:
+    void add(const T& value) {
+        if (static_cast<int>(data.size()) >= Cap) {
+            throw CommandError("registry is full");
+        }
+        data.push_back(value);
+    }
+
+    int size() const {
+        return static_cast<int>(data.size());
+    }
+
+    T& operator[](int index) {
+        return data.at(index);
+    }
+
+    const T& operator[](int index) const {
+        return data.at(index);
+    }
+
+    friend ostream& operator<<(ostream& out, const Registry<T, Cap>& registry) {
+        for (const auto& item : registry.data) {
+            out << item << '\n';
+        }
+        return out;
+    }
+};
+
+// ==================== SERVICE CENTER ====================
+
+class ServiceCenter {
+public:
+    void inspect(const InventoryItem& item) const {
+        string name = item.name();
+        string lowerName = name;
+        transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+                  [](unsigned char c) {
+                      return static_cast<char>(tolower(c));
+                  });
+        if (lowerName.find("broken") != string::npos) {
+            throw InspectionRejected();
+        }
+    }
+};
+
+// ==================== FLEET ====================
+
+class Fleet {
+private:
+    vector<shared_ptr<InventoryItem>> items;
+    weak_ptr<InventoryItem> focusItem;
+    ServiceCenter serviceCenter;
+    shared_ptr<ModelSpec> scooterSpec = make_shared<ModelSpec>("Electric scooter");
+    shared_ptr<ModelSpec> bicycleSpec = make_shared<ModelSpec>("Bicycle");
+    shared_ptr<ModelSpec> electricBicycleSpec = make_shared<ModelSpec>("Electric bicycle");
+    bool containsId(const string& id) const {
+        for (const auto& item : items) {
+            if (item->inventoryId() == id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void checkId(const string& id) const {
+        if (id.empty()) {
+            throw CommandError("empty inventory id");
+        }
+        if (containsId(id)) {
+            throw CommandError("inventory id already exists");
+        }
+    }
+
+public:
+    void addTransport(unique_ptr<Transport> item) {
+        checkId(item->inventoryId());
+        serviceCenter.inspect(*item);
+        shared_ptr<InventoryItem> accepted(move(item));
+        items.push_back(move(accepted));
+    }
+
+    void addThing(shared_ptr<InventoryItem> item) {
+        checkId(item->inventoryId());
+        items.push_back(move(item));
+    }
+
+    double totalEnergy() const {
+        double result = 0.0;
+        for (const auto& item : items) {
+            const EnergyConsumer* consumer = dynamic_cast<const EnergyConsumer*>(item.get());
+            if (consumer != nullptr) {
+                result += consumer->dailyEnergy();
+            }
+        }
+        return result;
+    }
+
+    void showNovice() const {
+        for (const auto& item : items) {
+            const Transport* transport = dynamic_cast<const Transport*>(item.get());
+            if (transport != nullptr && transport->suitableForNovice()) {
+                cout << item->name() << " " << item->inventoryId() << '\n';
+            }
+        }
+    }
+
+    void showAll() const {
+        Registry<shared_ptr<InventoryItem>, 1000> sorted;
+        vector<shared_ptr<InventoryItem>> copy = items;
+        sort(copy.begin(), copy.end(),
+             [](const shared_ptr<InventoryItem>& a, const shared_ptr<InventoryItem>& b) {
+                 return *a < *b;
+             });
+        for (const auto& item : copy) {
+            sorted.add(item);
+        }
+        for (int i = 0; i < sorted.size(); ++i) {
+            cout << *sorted[i] << '\n';
+        }
+    }
+
+    void showReport() const {
+        cout << "count: " << items.size() << '\n';
+        cout << "energy: " << fixed << setprecision(1) << totalEnergy() << '\n';
+    }
+
+    void countNovice() const {
+        int count = 0;
+        for (const auto& item : items) {
+            const Transport* transport = dynamic_cast<const Transport*>(item.get());
+            if (transport != nullptr && transport->suitableForNovice()) {
+                ++count;
+            }
+        }
+        cout << count << '\n';
+    }
+
+    void setFocus(const string& id) {
+        for (const auto& item : items) {
+            if (item->inventoryId() == id) {
+                focusItem = item;
+                return;
+            }
+        }
+        throw CommandError("item not found");
+    }
+
+    void showFocus() const {
+        shared_ptr<InventoryItem> item = focusItem.lock();
+        if (!item) {
+            cout << "expired\n";
+            return;
+        }
+        cout << *item << '\n';
+    }
+
+    void removeItem(const string& id) {
+        auto it = find_if(items.begin(), items.end(),
+                          [&id](const shared_ptr<InventoryItem>& item) {
+                              return item->inventoryId() == id;
+                          });
+        if (it == items.end()) {
+            throw CommandError("item not found");
+        }
+        items.erase(it);
+    }
+};
+
+// ==================== COMMAND PROCESSING ====================
+
+int main() {
+    Fleet fleet;
+    string line;
+    while (getline(cin, line)) {
+        if (line.empty()) {
+            continue;
+        }
+        try {
+            istringstream input(line);
+            string command;
+            input >> command;
+            if (command == "quit") {
+                break;
+            } else if (command == "add") {
+                string type, id, name;
+                if (!(input >> type >> id >> name)) {
+                    throw CommandError("invalid add command");
+                }
+                if (type == "scooter") {
+                    double energy;
+                    int score;
+                    if (!(input >> energy >> score)) {
+                        throw CommandError("invalid scooter arguments");
+                    }
+                    fleet.addTransport(make_unique<ElectricScooter>(id, name, energy, score, make_shared<ModelSpec>("Electric scooter")));
+                } else if (type == "bike") {
+                    int score;
+                    if (!(input >> score)) {
+                        throw CommandError("invalid bike arguments");
+                    }
+                    fleet.addTransport(make_unique<Bicycle>(id, name, score, make_shared<ModelSpec>("Bicycle")));
+                } else if (type == "ebike") {
+                    double energy;
+                    int score;
+                    if (!(input >> energy >> score)) {
+                        throw CommandError("invalid ebike arguments");
+                    }
+                    fleet.addTransport(
+                        make_unique<ElectricBicycle>(id, name, energy, score, make_shared<ModelSpec>("Electric bicycle")));
+                } else if (type == "helmet") {
+                    fleet.addThing(make_shared<Helmet>(id, name));
+                }
+
+                else if (type == "dock") {
+                    double energy;
+                    if (!(input >> energy)) {
+                        throw CommandError("invalid dock arguments");
+                    }
+                    fleet.addThing(make_shared<Dock>(id, name, energy));
+                } else {
+                    throw CommandError("unknown item type");
+                }
+            } else if (command == "list") {
+                fleet.showAll();
+            } else if (command == "energy") {
+                cout << fixed << setprecision(1) << fleet.totalEnergy() << '\n';
+            } else if (command == "novice") {
+                fleet.showNovice();
+            } else if (command == "report") {
+                fleet.showReport();
+            } else if (command == "count_novice") {
+                fleet.countNovice();
+            } else if (command == "focus") {
+                string id;
+                if (!(input >> id)) {
+                    throw CommandError("missing id");
+                }
+                fleet.setFocus(id);
+            } else if (command == "show_focus") {
+                fleet.showFocus();
+            } else if (command == "remove") {
+                string id;
+                if (!(input >> id)) {
+                    throw CommandError("missing id");
+                }
+                fleet.removeItem(id);
+            } else {
+                throw CommandError("unknown command");
+            }
+            string extra;
+            if (input >> extra) {
+                throw CommandError("too many arguments");
+            }
+        }
+        catch (const FleetError& error) {
+            cout << "error: " << error.what() << '\n';
+        }
+        catch (const exception& error) {
+            cout << "error: " << error.what() << '\n';
+        }
+    }
+}
